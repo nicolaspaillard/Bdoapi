@@ -1,7 +1,7 @@
 FROM golang:alpine AS build
 
 # Install the ca-certificate package
-RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates && apk add --no-cache bash
+RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates
 
 # Move to working directory /build
 WORKDIR /build
@@ -22,7 +22,9 @@ RUN CGO_ENABLED=0 go build -o app
 # Production stage
 # =============================================================================
 # Create a production stage to run the application binary
-FROM scratch
+FROM alpine:latest AS final
+
+RUN apk update && apk add --no-cache bash
 
 ARG UID=1000
 ARG GID=1000
