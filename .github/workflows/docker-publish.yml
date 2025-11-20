@@ -27,15 +27,15 @@ jobs:
       matrix:
         include:
           - dockerfile: ./api/Dockerfile
-            image: nicolaspaillard/bdoapi:latest
+            image: nicolaspaillard/bdoapi
             context: ./api
             name: api
           - dockerfile: ./backend/Dockerfile
-            image: nicolaspaillard/bdobackend:latest
+            image: nicolaspaillard/bdobackend
             context: ./backend
             name: backend
           - dockerfile: ./backend/Dockerfile.dev
-            image: nicolaspaillard/bdobackend-dev:latest
+            image: nicolaspaillard/bdobackend-dev
             context: ./backend
             name: backend-dev
     permissions:
