@@ -144,6 +144,8 @@ func Update() {
 			}
 			queries.DeleteOldPearlItems(ctx)
 			conn.Close(ctx)
+			log.Println("Pearl items updated successfully")
+			log.Println("Sleeping for 1 hour")
 			time.Sleep(time.Hour)
 		}
 	}()
