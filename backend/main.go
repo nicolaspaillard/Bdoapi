@@ -30,7 +30,7 @@ var connectionString = fmt.Sprintf("postgres://%s:%s@%s:5432/%s?sslmode=disable"
 func main() {
 	Migrate()
 	Update()
-	// Start()
+	Start()
 }
 
 func Migrate() {
