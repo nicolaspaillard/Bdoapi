@@ -91,6 +91,13 @@ go run main.go
 - Les migrations SQL sont dans `backend/sqlc/migrations/`.
 - Les requêtes SQL sont dans `backend/sqlc/queries/`.
 
+## Liens de test
+
+Utilisez ces URLs pour tester rapidement les endpoints de l'API :
+
+- https://bdoapi.nicolaspaillard.fr/pearlitems?date=2025-11-20%2002:00:00
+- https://bdoapi-nest.nicolaspaillard.fr/pearl_items?date=2025-11-20%2002:00:00
+
 ## Licence
 
 Voir le fichier `LICENSE`.
