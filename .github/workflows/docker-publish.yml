@@ -27,14 +27,17 @@ jobs:
       matrix:
         include:
           - dockerfile: ./api/Dockerfile
-            image: nicolaspaillard/bdoapi
+            image: nicolaspaillard/bdoapi:latest
             context: ./api
+            name: api
           - dockerfile: ./backend/Dockerfile
-            image: nicolaspaillard/bdobackend
+            image: nicolaspaillard/bdobackend:latest
             context: ./backend
+            name: backend
           - dockerfile: ./backend/Dockerfile.dev
-            image: nicolaspaillard/bdobackend-dev
+            image: nicolaspaillard/bdobackend-dev:latest
             context: ./backend
+            name: backend-dev
     permissions:
       packages: write
       contents: read
@@ -94,4 +97,4 @@ jobs:
           subject-name: ${{ matrix.image }}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ github.token }}
