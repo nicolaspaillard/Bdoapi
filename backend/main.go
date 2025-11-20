@@ -162,6 +162,7 @@ func Start() {
 		HandleError(ErrorParams{err: err, Message: "Failed to get pearl items"})
 		ginContext.JSON(200, pearlitems)
 	}
+	gin.SetMode(gin.ReleaseMode)
 	ginRouter := gin.Default()
 	ginRouter.Use(cors.Default())
 	ginRouter.GET("/pearlitems", getPearlItems)

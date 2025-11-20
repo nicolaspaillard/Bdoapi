@@ -12,5 +12,7 @@ COPY go.mod go.sum ./
 # Install dependencies
 RUN go mod download
 
+COPY . .
+
 # Start air for live reloading
 CMD ["air"]

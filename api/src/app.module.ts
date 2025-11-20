@@ -10,7 +10,7 @@ import { PearlItem } from "./pearl-items/entities/pearl-item.entity";
     PearlItemsModule,
     TypeOrmModule.forRoot({
       type: "postgres",
-      host: process.env.DB_HOST ?? "db",
+      host: process.env.DB_HOST ?? "database",
       port: Number(process.env.DB_PORT ?? "5432"),
       database: process.env.DB_NAME ?? "bdoapi",
       username: process.env.DB_USER ?? "postgres",
