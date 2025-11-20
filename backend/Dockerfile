@@ -1,7 +1,7 @@
 FROM golang:alpine AS build
 
 # Install the ca-certificate package
-RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates
+RUN apk update && apk add --no-cache ca-certificates && update-ca-certificates && apk add --no-cache bash
 
 # Move to working directory /build
 WORKDIR /build
