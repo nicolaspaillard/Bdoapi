@@ -108,11 +108,15 @@ func Update() {
 			var pearlItems1 WorldMarketListResult
 			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=1", Output: &pearlItems1}); err != nil {
 				log.Printf("Failed to get world market list (subCategory=1): %v", err)
+				log.Println("Sleeping for 1 hour")
+				time.Sleep(time.Hour)
 				continue
 			}
 			var pearlItems2 WorldMarketListResult
 			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=2", Output: &pearlItems2}); err != nil {
 				log.Printf("Failed to get world market list (subCategory=2): %v", err)
+				log.Println("Sleeping for 1 hour")
+				time.Sleep(time.Hour)
 				continue
 			}
 			var pearlItems = append(pearlItems1, pearlItems2...)
@@ -142,6 +146,8 @@ func Update() {
 				var output BiddingInfoListResult
 				if err := request(RequestParams{Method: "POST", Url: "https://api.arsha.io/v2/eu/GetBiddingInfoList?lang=en", Body: body, Output: &output}); err != nil {
 					log.Printf("Failed to get bidding info list: %v", err)
+					log.Println("Sleeping for 1 hour")
+					time.Sleep(time.Hour)
 					continue
 				}
 				preorderItems = append(preorderItems, output...)
