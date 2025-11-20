@@ -1,95 +1,82 @@
 # Bdoapi
 
-Ce dépôt contient l'API front (Node/Nest) et un backend en Go pour la gestion des "pearl items".
+Bdoapi est un projet composé de deux services principaux :
 
-## Images Docker publiées
+- **api/** : Un backend Node.js utilisant NestJS pour exposer des endpoints REST.
+- **backend/** : Un service Go pour la gestion de la base de données et la logique métier associée.
 
-- `bdoapi` : https://hub.docker.com/r/nicolaspaillard/bdoapi
-- `bdobackend` : https://hub.docker.com/r/nicolaspaillard/bdobackend
-- `bdobackend-dev` : https://hub.docker.com/r/nicolaspaillard/bdobackend-dev
+### Images Docker utilisées
 
-## Résumé
+- [nicolaspaillard/bdobackend:latest](https://hub.docker.com/r/nicolaspaillard/bdobackend)
+  (backend)
+- [nicolaspaillard/bdobackend-dev:latest](https://hub.docker.com/r/nicolaspaillard/bdobackend-dev)
+  (backend-dev)
+- [nicolaspaillard/bdoapi:latest](https://hub.docker.com/r/nicolaspaillard/bdoapi)
+  (api)
+- [postgres:17-alpine](https://hub.docker.com/_/postgres) (database)
 
-Le projet est composé de deux parties principales :
+## Prérequis
 
-- `api/` : API en Node.js (NestJS). Contient l'API exposée via Docker (image `bdoapi`).
-- `backend/` : Backend en Go (service métier, accès DB). Image : `bdobackend` (et `bdobackend-dev` pour dev).
+- Docker & Docker Compose
+- Node.js (pour développement sur `api/`)
+- Go (pour développement sur `backend/`)
 
-## Structure importante
+## Démarrage rapide
 
-- `api/` : code NestJS (Dockerfile, package.json, src/...).
-- `backend/` : application Go, migrations SQL et configuration `sqlc`.
+## Utilisation avec Docker et Docker Compose
 
-## Configuration requise
+1. **Configurer les variables d'environnement**
 
-Le projet attend une base PostgreSQL. Vous pouvez démarrer l'ensemble avec Docker Compose. Les variables d'environnement principales sont :
+   - Copiez le fichier d'exemple :
+     ```powershell
+     cp example.env .env
+     ```
+   - Modifiez `.env` selon vos besoins (voir les variables utilisées dans `docker-compose.yml`).
 
-- `DB_HOST` : hôte PostgreSQL
-- `DB_PORT` : port (ex : 5432)
-- `DB_NAME` : nom de la base
-- `DB_USER` : utilisateur
-- `DB_PASSWORD` : mot de passe
+2. **Lancer tous les services**
 
-Exemple de fichier `.env` (ne pas committer les secrets) :
+   ```powershell
+   docker-compose up --build
+   ```
 
-```
-DB_HOST=database
-DB_PORT=5432
-DB_NAME=bdo
-DB_USER=bdo_user
-DB_PASSWORD=secret
-```
+   Cela démarre :
 
-## Démarrage rapide (Docker Compose)
+   - `database` (PostgreSQL, port 5432)
+   - `backend` (Go, port 8080)
+   - `backend-dev` (Go dev, port 8081, volume monté)
+   - `api` (NestJS, port 8082)
 
-Le dépôt contient un `docker-compose.yml` prêt à l'emploi. Pour lancer les services en arrière-plan (PowerShell) :
+3. **Arrêter les services**
+   ```powershell
+   docker-compose down
+   ```
 
-```powershell
-docker compose up -d
-```
+### Accès aux services
 
-Vérifier les logs (exemple pour l'API) :
+> Les ports sont exposés en interne par défaut. Pour accéder à un service depuis l'extérieur, adaptez le `docker-compose.yml` (ajoutez `ports:` si besoin).
 
-```powershell
-docker compose logs -f api
-```
+## Démarrage manuel
 
-## Services fournis par le compose
-
-- `database` : PostgreSQL 17 (volume persistant pour les données).
-- `backend` : backend Go (image `nicolaspaillard/bdobackend:latest`).
-- `backend-dev` : version de développement (mount du code local pour hot-reload), image `nicolaspaillard/bdobackend-dev:latest`.
-- `api` : front/API NestJS (image `nicolaspaillard/bdoapi:latest`).
-
-## Ports exposés (par défaut dans le compose)
-
-- backend : 8080
-- backend-dev : 8081
-- api : 8082
-
-## Développement local
-
-- API (NestJS) : se placer dans le dossier `api/`, installer les dépendances (`npm install`) puis lancer en dev.
-- Backend (Go) : se placer dans `backend/`, construire et lancer l'application localement (`go run .` ou `go build`).
-
-## Construire les images localement
-
-Exemples (depuis la racine) :
+### API (NestJS)
 
 ```powershell
-docker build -t nicolaspaillard/bdobackend:local -f backend/Dockerfile backend
-docker build -t nicolaspaillard/bdoapi:local -f api/Dockerfile api
+cd api
+npm install
+npm run start:dev
 ```
 
-## Notes & bonnes pratiques
+### Backend (Go)
 
-- Utiliser un fichier `.env` pour stocker les variables sensibles.
-- Les migrations SQL sont dans `backend/migrations/` et les requêtes `sqlc` dans `backend/queries`.
+```powershell
+cd backend
+go run main.go
+```
 
-## Contribuer
+## Migration & Base de données
 
-Les contributions sont les bienvenues : ouvrez une issue ou un pull request. Précisez l'environnement et la version de Docker utilisée.
+- Les migrations SQL sont dans `backend/sqlc/migrations/`.
+- Les requêtes SQL sont dans `backend/sqlc/queries/`.
 
 ## Licence
 
-Ce projet n'a pas de licence renseignée dans le dépôt. Ajoutez-en une si vous souhaitez autoriser la réutilisation.
+Voir le fichier `LICENSE`.
