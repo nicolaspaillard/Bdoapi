@@ -79,6 +79,8 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ${{ matrix.image }}
+          tags: |
+            type=raw,value=latest
 
       - name: Build and push Docker image
         id: push
