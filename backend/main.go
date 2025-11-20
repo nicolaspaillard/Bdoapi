@@ -37,11 +37,17 @@ func main() {
 func Migrate() {
 	log.Println("Starting database migration process")
 	db, err := sql.Open("postgres", connectionString)
-	HandleError(ErrorParams{err: err, Message: "Failed to connect to database", fatal: true})
+	if err != nil {
+		log.Printf("Failed to connect to database: %v", err)
+		return
+	}
 	defer db.Close()
 	goose.SetDialect("postgres")
 	err = goose.Up(db, "./migrations")
-	HandleError(ErrorParams{err: err, Message: "Failed to run migrations", fatal: true})
+	if err != nil {
+		log.Printf("Failed to run migrations: %v", err)
+		return
+	}
 	log.Println("Migration up completed successfully")
 }
 func Update() {
@@ -75,7 +81,7 @@ func Update() {
 			MainCategory int    `json:"mainCategory"`
 			SubCategory  int    `json:"subCategory"`
 		}
-		request := func(params RequestParams) {
+		request := func(params RequestParams) error {
 			var resp *http.Response
 			var err error
 			switch params.Method {
@@ -84,18 +90,31 @@ func Update() {
 			case "POST":
 				resp, err = http.Post(params.Url, "application/json", bytes.NewBuffer(params.Body))
 			}
-			HandleError(ErrorParams{err: err, Message: "Failed to send request"})
+			if err != nil {
+				return fmt.Errorf("failed to send request: %w", err)
+			}
 			defer resp.Body.Close()
 			body, err := io.ReadAll(resp.Body)
-			HandleError(ErrorParams{err: err, Message: "Failed to read response body"})
+			if err != nil {
+				return fmt.Errorf("failed to read response body: %w", err)
+			}
 			err = json.Unmarshal(body, &params.Output)
-			HandleError(ErrorParams{err: err, Message: "Failed to unmarshal response body"})
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal response body: %w", err)
+			}
+			return nil
 		}
 		for {
 			var pearlItems1 WorldMarketListResult
-			request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=1", Output: &pearlItems1})
+			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=1", Output: &pearlItems1}); err != nil {
+				log.Printf("Failed to get world market list (subCategory=1): %v", err)
+				continue
+			}
 			var pearlItems2 WorldMarketListResult
-			request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=2", Output: &pearlItems2})
+			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=2", Output: &pearlItems2}); err != nil {
+				log.Printf("Failed to get world market list (subCategory=2): %v", err)
+				continue
+			}
 			var pearlItems = append(pearlItems1, pearlItems2...)
 			x := 0
 			for _, i := range pearlItems {
@@ -116,14 +135,23 @@ func Update() {
 			var preorderItems BiddingInfoListResult
 			for _, postItem := range postItems {
 				body, err := json.Marshal(postItem)
-				HandleError(ErrorParams{err: err, Message: "Failed to marshal post body"})
+				if err != nil {
+					log.Printf("Failed to marshal post body: %v", err)
+					continue
+				}
 				var output BiddingInfoListResult
-				request(RequestParams{Method: "POST", Url: "https://api.arsha.io/v2/eu/GetBiddingInfoList?lang=en", Body: body, Output: &output})
+				if err := request(RequestParams{Method: "POST", Url: "https://api.arsha.io/v2/eu/GetBiddingInfoList?lang=en", Body: body, Output: &output}); err != nil {
+					log.Printf("Failed to get bidding info list: %v", err)
+					continue
+				}
 				preorderItems = append(preorderItems, output...)
 			}
 			ctx := context.Background()
 			conn, err := pgx.Connect(ctx, connectionString)
-			HandleError(ErrorParams{err: err, Message: "Failed to connect to database"})
+			if err != nil {
+				log.Printf("Failed to connect to database: %v", err)
+				continue
+			}
 			queries := db.New(conn)
 			currentTime := time.Now()
 			scrapTime := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), currentTime.Hour(), 0, 0, 0, currentTime.Location())
@@ -140,7 +168,10 @@ func Update() {
 						Sold:      pearlItem.TotalTrades,
 						Preorders: preorders,
 					})
-					HandleError(ErrorParams{err: err, Message: "Failed to create pearl item"})
+					if err != nil {
+						log.Printf("Failed to create pearl item: %v", err)
+						continue
+					}
 				}
 			}
 			queries.DeleteOldPearlItems(ctx)
@@ -155,14 +186,23 @@ func Start() {
 	getPearlItems := func(ginContext *gin.Context) {
 		dbContext := context.Background()
 		dbConn, err := pgx.Connect(dbContext, connectionString)
-		HandleError(ErrorParams{err: err, Message: "Failed to connect to database"})
+		if err != nil {
+			log.Printf("Failed to connect to database: %v", err)
+			return
+		}
 		defer dbConn.Close(dbContext)
 		dbQueries := db.New(dbConn)
 		date, err := time.Parse("2006-01-02 15:04:05", ginContext.Query("date"))
 		log.Println(date)
-		HandleError(ErrorParams{err: err, Message: "Failed to parse date"})
+		if err != nil {
+			log.Printf("Failed to parse date: %v", err)
+			return
+		}
 		pearlitems, err := dbQueries.GetPearlItems(dbContext, time.Date(date.Year(), date.Month(), date.Day(), date.Hour(), 0, 0, 0, date.Location()))
-		HandleError(ErrorParams{err: err, Message: "Failed to get pearl items"})
+		if err != nil {
+			log.Printf("Failed to get pearl items: %v", err)
+			return
+		}
 		ginContext.JSON(200, pearlitems)
 	}
 	gin.SetMode(gin.ReleaseMode)
@@ -171,24 +211,8 @@ func Start() {
 	ginRouter.GET("/pearlitems", getPearlItems)
 	log.Printf("API started, listening on port %s", os.Getenv("PORT"))
 	err := ginRouter.Run(fmt.Sprintf(":%s", os.Getenv("PORT")))
-	HandleError(ErrorParams{err: err, Message: "Failed to start server", fatal: true})
-}
-
-type ErrorParams struct {
-	err     error
-	Message string
-	fatal   bool
-}
-
-func HandleError(params ErrorParams) {
-	if params.err != nil {
-		if params.Message == "" {
-			params.Message = "An error occured"
-		}
-		if params.fatal {
-			log.Fatalf("%v %v", params.Message+":", params.err)
-		} else {
-			log.Printf("%v %v", params.Message+":", params.err)
-		}
+	if err != nil {
+		log.Printf("Failed to start server: %v", err)
+		return
 	}
 }
