@@ -23,6 +23,9 @@ RUN CGO_ENABLED=0 go build -o app
 # =============================================================================
 # Create a production stage to run the application binary
 FROM scratch
+
+ARG UID=1000
+ARG GID=1000
  
 # # Copy binary from builder stage
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
