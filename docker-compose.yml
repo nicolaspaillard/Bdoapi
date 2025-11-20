@@ -7,10 +7,26 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_USER: ${DB_USER}
     volumes:
-      - /Volume2/Apps/bdoapi/data:/var/lib/postgresql/data
+      - db:/var/lib/postgresql/data
 
   backend:
-    image: bdoapi/backend:latest
+    image: nicolaspaillard/bdobackend:latest
+    restart: always
+    environment:
+      LOG_LEVEL: info
+      DB_HOST: db
+      DB_NAME: ${DB_NAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_USER: ${DB_USER}
+      PORT: 8081
+      GIN_MODE: release
+    ports:
+      - 8081:8081
+    depends_on:
+      - db
+
+  backend-dev:
+    image: nicolaspaillard/bdobackend-dev:latest
     restart: always
     environment:
       LOG_LEVEL: info
@@ -23,12 +39,12 @@ services:
     ports:
       - 8081:8081
     volumes:
-      - /Volume2/Apps/bdoapi/backend:/app
+      - backend:/app
     depends_on:
       - db
 
   api:
-    image: bdoapi/api:latest
+    image: nicolaspaillard/bdoapi:latest
     restart: always
     environment:
       DB_HOST: db
@@ -55,3 +71,7 @@ services:
       - 3000:3000
     depends_on:
       - db
+
+volumes:
+  db:
+  backend:
