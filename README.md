@@ -1,4 +1,8 @@
-Images available on :
+Images :
+- https://hub.docker.com/r/nicolaspaillard/bdoapi
+- https://hub.docker.com/r/nicolaspaillard/bdobackend
+- https://hub.docker.com/r/nicolaspaillard/bdobackend-dev
+
 
 
 Install using docker compose :
