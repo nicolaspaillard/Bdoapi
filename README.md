@@ -1,5 +1,10 @@
 # Bdoapi
 
+[![CI status](https://github.com/nicolaspaillard/Bdoapi/actions/workflows/docker-publish.yml/badge.svg?branch=main)](https://github.com/nicolaspaillard/Bdoapi/actions/workflows/docker-publish.yml)
+[![Docker Pulls - bdoapi](https://img.shields.io/docker/pulls/nicolaspaillard/bdoapi?style=flat-square)](https://hub.docker.com/r/nicolaspaillard/bdoapi)
+[![Docker Pulls - bdobackend](https://img.shields.io/docker/pulls/nicolaspaillard/bdobackend?style=flat-square)](https://hub.docker.com/r/nicolaspaillard/bdobackend)
+[![Docker Pulls - bdobackend-dev](https://img.shields.io/docker/pulls/nicolaspaillard/bdobackend-dev?style=flat-square)](https://hub.docker.com/r/nicolaspaillard/bdobackend-dev)
+
 Bdoapi est un projet composé de deux services principaux :
 
 - **api/** : Un backend Node.js utilisant NestJS pour exposer des endpoints REST.
@@ -7,13 +12,22 @@ Bdoapi est un projet composé de deux services principaux :
 
 ### Images Docker utilisées
 
-- [nicolaspaillard/bdobackend:latest](https://hub.docker.com/r/nicolaspaillard/bdobackend)
-  (backend)
-- [nicolaspaillard/bdobackend-dev:latest](https://hub.docker.com/r/nicolaspaillard/bdobackend-dev)
-  (backend-dev)
-- [nicolaspaillard/bdoapi:latest](https://hub.docker.com/r/nicolaspaillard/bdoapi)
-  (api)
-- [postgres:17-alpine](https://hub.docker.com/_/postgres) (database)
+Ce projet publie et utilise les images Docker suivantes :
+
+- [nicolaspaillard/bdobackend:latest](https://hub.docker.com/r/nicolaspaillard/bdobackend) — backend (Go).
+- [nicolaspaillard/bdobackend-dev:latest](https://hub.docker.com/r/nicolaspaillard/bdobackend-dev) — image de développement pour le backend.
+- [nicolaspaillard/bdoapi:latest](https://hub.docker.com/r/nicolaspaillard/bdoapi) — API (NestJS).
+- [postgres:17-alpine](https://hub.docker.com/_/postgres) — image officielle PostgreSQL utilisée pour la base de données.
+
+## Intégration continue (CI)
+
+Ce projet utilise **GitHub Actions** pour l'intégration continue. À chaque push ou pull request sur la branche principale, le workflow défini dans `.github/workflows/docker-publish.yml` est déclenché. Il automatise :
+
+- La construction des images Docker pour les services `api` (NestJS) et `backend` (Go)
+- Les tests de build
+- La publication des images sur Docker Hub si le build est réussi
+
+L'état de la CI est visible via le badge en haut de ce fichier. Pour plus de détails, consultez le fichier de workflow ou la page [Actions du dépôt](https://github.com/nicolaspaillard/Bdoapi/actions/workflows/docker-publish.yml).
 
 ## Prérequis
 
