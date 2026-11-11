@@ -21,12 +21,19 @@ import (
 	"github.com/pressly/goose/v3"
 )
 
+func getEnv(key, fallback string) string {
+	if value, ok := os.LookupEnv(key); ok && value != "" {
+		return value
+	}
+	return fallback
+}
+
 var connectionString = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-	os.Getenv("DB_USER"),
-	os.Getenv("DB_PASSWORD"),
-	os.Getenv("DB_HOST"),
-	os.Getenv("DB_PORT"),
-	os.Getenv("DB_NAME"))
+	getEnv("DB_USER", "postgres"),
+	getEnv("DB_PASSWORD", "password"),
+	getEnv("DB_HOST", "localhost"),
+	getEnv("DB_PORT", "5432"),
+	getEnv("DB_NAME", "bdoapi"))
 
 func main() {
 	Migrate()
@@ -43,7 +50,7 @@ func Migrate() {
 	}
 	defer db.Close()
 	goose.SetDialect("postgres")
-	err = goose.Up(db, "./migrations")
+	err = goose.Up(db, "./sqlc/migrations")
 	if err != nil {
 		log.Printf("Failed to run migrations: %v", err)
 		return
@@ -53,7 +60,7 @@ func Migrate() {
 func Update() {
 	log.Println("Starting updater")
 	go func() {
-		type PostItem struct {
+		type PostId struct {
 			Id int64 `json:"id"`
 		}
 		type RequestParams struct {
@@ -98,43 +105,49 @@ func Update() {
 			if err != nil {
 				return fmt.Errorf("failed to read response body: %w", err)
 			}
-			err = json.Unmarshal(body, &params.Output)
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(body))
+			}
+			err = json.Unmarshal(body, params.Output)
 			if err != nil {
-				return fmt.Errorf("failed to unmarshal response body: %w", err)
+				return fmt.Errorf("failed to unmarshal response body: %w. %s", err, string(body))
 			}
 			return nil
 		}
 		for {
-			var pearlItems1 WorldMarketListResult
-			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=1", Output: &pearlItems1}); err != nil {
+			var outfitsMale WorldMarketListResult
+			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=1", Output: &outfitsMale}); err != nil {
 				log.Printf("Failed to get world market list (subCategory=1): %v", err)
+				time.Sleep(5 * time.Minute)
 				continue
 			}
-			var pearlItems2 WorldMarketListResult
-			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=2", Output: &pearlItems2}); err != nil {
+			var outfitsFemale WorldMarketListResult
+			if err := request(RequestParams{Method: "GET", Url: "https://api.arsha.io/v2/eu/GetWorldMarketList?lang=en&mainCategory=55&subCategory=2", Output: &outfitsFemale}); err != nil {
 				log.Printf("Failed to get world market list (subCategory=2): %v", err)
+				time.Sleep(5 * time.Minute)
 				continue
 			}
-			var pearlItems = append(pearlItems1, pearlItems2...)
-			x := 0
-			for _, i := range pearlItems {
-				if strings.Contains(i.Name, "Premium Set") {
-					pearlItems[x] = i
-					x++
+			var outfits = append(outfitsMale, outfitsFemale...)
+			i := 0
+			for _, outfit := range outfits {
+				if strings.Contains(outfit.Name, "Premium Set") {
+					outfits[i] = outfit
+					i++
 				}
 			}
-			pearlItems = pearlItems[:x]
-			var postItems = [][]PostItem{{}}
-			for i, j := 0, 0; i < len(pearlItems); i++ {
-				if len(postItems[j]) == 20 {
-					postItems = append(postItems, []PostItem{})
+			outfits = outfits[:i]
+			var postIds = [][]PostId{{}}
+			for i, j := 0, 0; i < len(outfits); i++ {
+				if i > 0 && i%20 == 0 {
+					postIds = append(postIds, []PostId{})
 					j++
 				}
-				postItems[j] = append(postItems[j], PostItem{Id: pearlItems[i].Id})
+				postIds[j] = append(postIds[j], PostId{Id: outfits[i].Id})
 			}
 			var preorderItems BiddingInfoListResult
-			for _, postItem := range postItems {
-				body, err := json.Marshal(postItem)
+			failed := false
+			for _, postIds := range postIds {
+				body, err := json.Marshal(postIds)
 				if err != nil {
 					log.Printf("Failed to marshal post body: %v", err)
 					continue
@@ -142,9 +155,14 @@ func Update() {
 				var output BiddingInfoListResult
 				if err := request(RequestParams{Method: "POST", Url: "https://api.arsha.io/v2/eu/GetBiddingInfoList?lang=en", Body: body, Output: &output}); err != nil {
 					log.Printf("Failed to get bidding info list: %v", err)
-					continue
+					failed = true
+					break
 				}
 				preorderItems = append(preorderItems, output...)
+			}
+			if failed {
+				time.Sleep(5 * time.Minute)
+				continue
 			}
 			ctx := context.Background()
 			conn, err := pgx.Connect(ctx, connectionString)
@@ -155,8 +173,8 @@ func Update() {
 			queries := db.New(conn)
 			currentTime := time.Now()
 			scrapTime := time.Date(currentTime.Year(), currentTime.Month(), currentTime.Day(), currentTime.Hour(), 0, 0, 0, currentTime.Location())
-			if len(pearlItems) == len(preorderItems) {
-				for i, pearlItem := range pearlItems {
+			if len(outfits) == len(preorderItems) {
+				for i, pearlItem := range outfits {
 					var preorders int64
 					for _, j := range preorderItems[i].Orders {
 						preorders += j.Buyers
@@ -177,8 +195,8 @@ func Update() {
 			queries.DeleteOldPearlItems(ctx)
 			conn.Close(ctx)
 			log.Println("Pearl items updated successfully")
-			log.Println("Sleeping for 1 hour")
-			time.Sleep(time.Hour)
+			log.Println("Sleeping until the next hour")
+			time.Sleep(time.Until(time.Now().Truncate(time.Hour).Add(time.Hour)))
 		}
 	}()
 }
@@ -209,10 +227,10 @@ func Start() {
 	ginRouter := gin.Default()
 	ginRouter.Use(cors.Default())
 	ginRouter.GET("/pearlitems", getPearlItems)
-	log.Printf("API started, listening on port %s", os.Getenv("PORT"))
-	err := ginRouter.Run(fmt.Sprintf(":%s", os.Getenv("PORT")))
+	err := ginRouter.Run(fmt.Sprintf(":%s", getEnv("PORT", "8081")))
 	if err != nil {
 		log.Printf("Failed to start server: %v", err)
 		return
 	}
+	log.Printf("API started, listening on port %s", getEnv("PORT", "8081"))
 }

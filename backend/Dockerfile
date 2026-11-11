@@ -32,7 +32,7 @@ ARG GID=1000
 # # Copy binary from builder stage
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /build/app /app
-COPY --from=build /build/sqlc/migrations /migrations
+COPY --from=build /build/sqlc/migrations /sqlc/migrations
 
 # # Start the application
 CMD ["/app"]

@@ -14,4 +14,4 @@ WHERE NOT EXISTS (SELECT 1 FROM pearl_items WHERE itemid = $1 AND date = $3);
 
 -- name: DeleteOldPearlItems :exec
 DELETE FROM pearl_items
-WHERE date < now() - interval '3 weeks';
+WHERE date < now() - interval '4 weeks';
