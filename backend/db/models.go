@@ -8,7 +8,16 @@ import (
 	"time"
 )
 
-type PearlItem struct {
+type Outfit struct {
+	ID        int64
+	Itemid    int64
+	Name      string
+	Date      time.Time
+	Sold      int64
+	Preorders int64
+}
+
+type Pet struct {
 	ID        int64
 	Itemid    int64
 	Name      string
