@@ -1,5 +1,5 @@
 -- name: GetOutfits :many
-SELECT a.name,a.sold - b.sold AS sold,a.preorders FROM outfits a
+SELECT a.itemid,a.name,a.sold - b.sold AS sold,a.preorders FROM outfits a
 INNER JOIN outfits b ON a.itemid = b.itemid
 WHERE a.date = (SELECT MAX(date) FROM outfits)
 AND b.date = (SELECT MAX(date) FROM outfits WHERE outfits.date <= $1)

@@ -48,7 +48,7 @@ func (q *Queries) DeleteOldPets(ctx context.Context) error {
 }
 
 const getPets = `-- name: GetPets :many
-SELECT a.name,a.sold - b.sold AS sold,a.preorders FROM pets a
+SELECT a.itemid,a.name,a.sold - b.sold AS sold,a.preorders FROM pets a
 INNER JOIN pets b ON a.itemid = b.itemid
 WHERE a.date = (SELECT MAX(date) FROM pets)
 AND b.date = (SELECT MAX(date) FROM pets WHERE pets.date <= $1)
@@ -56,6 +56,7 @@ ORDER BY a.name
 `
 
 type GetPetsRow struct {
+	Itemid    int64
 	Name      string
 	Sold      int32
 	Preorders int64
@@ -70,7 +71,12 @@ func (q *Queries) GetPets(ctx context.Context, date time.Time) ([]GetPetsRow, er
 	var items []GetPetsRow
 	for rows.Next() {
 		var i GetPetsRow
-		if err := rows.Scan(&i.Name, &i.Sold, &i.Preorders); err != nil {
+		if err := rows.Scan(
+			&i.Itemid,
+			&i.Name,
+			&i.Sold,
+			&i.Preorders,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

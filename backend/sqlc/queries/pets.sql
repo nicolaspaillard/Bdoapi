@@ -1,5 +1,5 @@
 -- name: GetPets :many
-SELECT a.name,a.sold - b.sold AS sold,a.preorders FROM pets a
+SELECT a.itemid,a.name,a.sold - b.sold AS sold,a.preorders FROM pets a
 INNER JOIN pets b ON a.itemid = b.itemid
 WHERE a.date = (SELECT MAX(date) FROM pets)
 AND b.date = (SELECT MAX(date) FROM pets WHERE pets.date <= $1)
