@@ -8,6 +8,15 @@ import (
 	"time"
 )
 
+type Event struct {
+	ID    string
+	Url   string
+	Image string
+	Tag   string
+	Title string
+	End   time.Time
+}
+
 type Outfit struct {
 	ID        int64
 	Itemid    int64

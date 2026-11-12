@@ -1,12 +1,3 @@
-# Ce workflow utilise des actions qui ne sont pas certifiées par GitHub.
-# Elles sont fournies par un tiers et régies par
-# des conditions d’utilisation du service, une politique de confidentialité et un support distincts.
-# documentation en ligne.
-
-# GitHub recommande d’épingler les actions à un SHA de commit.
-# Pour obtenir une version plus récente, vous devez mettre à jour le SHA.
-# Vous pouvez également référencer une balise ou une branche, mais l’action peut changer sans avertissement.
-
 name: Publish Docker image
 
 on:
@@ -26,23 +17,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - dockerfile: ./api/Dockerfile
+          - dockerfile: ./Dockerfile
             image: nicolaspaillard/bdoapi
-            context: ./api
             name: api
-          - dockerfile: ./backend/Dockerfile
-            image: nicolaspaillard/bdobackend
-            context: ./backend
-            name: backend
-          - dockerfile: ./backend/Dockerfile.dev
-            image: nicolaspaillard/bdobackend-dev
-            context: ./backend
-            name: backend-dev
+          - dockerfile: ./Dockerfile.dev
+            image: nicolaspaillard/bdoapi-dev
+            name: api-dev
     permissions:
-      packages: write
       contents: read
-      attestations: write
-      id-token: write
 
     steps:
       - name: Check out the repo
@@ -51,24 +33,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Cache Docker layers
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-buildx-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-buildx-
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.npm
-            ~/.cache/go-build
-            ~/go/pkg/mod
-          key: ${{ runner.os }}-${{ matrix.name }}-npm-${{ hashFiles('**/package-lock.json') }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: ${{ runner.os }}-${{ matrix.name }}-
-
       - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -83,19 +49,12 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        id: push
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
+          context: .
           file: ${{ matrix.dockerfile }}
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=local,src=/tmp/.buildx-cache
-
-      # - name: Generate artifact attestation
-      #   uses: actions/attest-build-provenance@v3
-      #   with:
-      #     subject-name: ${{ matrix.image }}
-      #     subject-digest: ${{ steps.push.outputs.digest }}
-      #     push-to-registry: true
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

@@ -1,6 +1,6 @@
 services:
   database:
-    image: postgres:17-alpine
+    image: postgres:18-alpine
     restart: always
     environment:
       POSTGRES_DB: ${DB_NAME}
@@ -9,10 +9,10 @@ services:
     expose:
       - 5432
     volumes:
-      - database:/var/lib/postgresql/data
+      - database:/var/lib/postgresql
 
-  backend:
-    image: nicolaspaillard/bdobackend:latest
+  api:
+    image: nicolaspaillard/bdoapi:latest
     restart: always
     environment:
       DB_HOST: ${DB_HOST}
@@ -26,8 +26,8 @@ services:
     depends_on:
       - database
 
-  backend-dev:
-    image: nicolaspaillard/bdobackend-dev:latest
+  api-dev:
+    image: nicolaspaillard/bdoapi-dev:latest
     restart: always
     environment:
       DB_HOST: ${DB_HOST}
@@ -40,22 +40,6 @@ services:
       - 8081
     volumes:
       - backend-dev:/app
-    depends_on:
-      - database
-
-  api:
-    image: nicolaspaillard/bdoapi:latest
-    restart: always
-    environment:
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_NAME: ${DB_NAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_USER: ${DB_USER}
-      PORT: 8082
-      NODE_ENV: production
-    expose:
-      - 8082
     depends_on:
       - database
 

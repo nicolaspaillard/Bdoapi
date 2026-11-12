@@ -1,39 +1,21 @@
-package main
+package pearl
 
 import (
 	"bdoapi/db"
+	"bdoapi/internal/config"
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
-	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
-	_ "github.com/lib/pq"
-	"github.com/pressly/goose/v3"
 )
-
-func getEnv(key, fallback string) string {
-	if value, ok := os.LookupEnv(key); ok && value != "" {
-		return value
-	}
-	return fallback
-}
-
-var connectionString = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-	getEnv("DB_USER", "postgres"),
-	getEnv("DB_PASSWORD", "password"),
-	getEnv("DB_HOST", "localhost"),
-	getEnv("DB_PORT", "5432"),
-	getEnv("DB_NAME", "bdoapi"))
 
 type PostId struct {
 	Id int64 `json:"id"`
@@ -112,6 +94,7 @@ func getWorldMarketList(mainCategory int, subCategories ...int) ([]MarketItem, e
 	}
 	return all, nil
 }
+
 func getBiddingInfo(items []MarketItem) ([]BiddingInfo, error) {
 	var result []BiddingInfo
 	for start := 0; start < len(items); start += 20 {
@@ -148,7 +131,7 @@ func updateItems(label string, items []MarketItem, save func(ctx context.Context
 	}
 
 	ctx := context.Background()
-	conn, err := pgx.Connect(ctx, connectionString)
+	conn, err := pgx.Connect(ctx, config.ConnectionString)
 	if err != nil {
 		return fmt.Errorf("connect to database: %w", err)
 	}
@@ -169,7 +152,7 @@ func updateItems(label string, items []MarketItem, save func(ctx context.Context
 	return nil
 }
 
-func updateOutfits() error {
+func UpdateOutfits() error {
 	market, err := getWorldMarketList(55, 1, 2)
 	if err != nil {
 		return err
@@ -193,7 +176,8 @@ func updateOutfits() error {
 		func(ctx context.Context, q *db.Queries) { q.DeleteOldOutfits(ctx) },
 	)
 }
-func updatePets() error {
+
+func UpdatePets() error {
 	pets, err := getWorldMarketList(55, 8)
 	if err != nil {
 		return err
@@ -212,7 +196,8 @@ func updatePets() error {
 	)
 }
 
-func listHandler(label string, get func(ctx context.Context, q *db.Queries, date time.Time) (any, error)) gin.HandlerFunc {
+// Handler serves the items returned by get for the date given in the "date" query parameter.
+func Handler(label string, get func(ctx context.Context, q *db.Queries, date time.Time) (any, error)) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		date, err := time.Parse("2006-01-02 15:04:05", c.Query("date"))
 		if err != nil {
@@ -222,7 +207,7 @@ func listHandler(label string, get func(ctx context.Context, q *db.Queries, date
 		}
 
 		ctx := context.Background()
-		conn, err := pgx.Connect(ctx, connectionString)
+		conn, err := pgx.Connect(ctx, config.ConnectionString)
 		if err != nil {
 			log.Printf("Failed to connect to database: %v", err)
 			c.Status(http.StatusInternalServerError)
@@ -238,71 +223,4 @@ func listHandler(label string, get func(ctx context.Context, q *db.Queries, date
 		}
 		c.JSON(http.StatusOK, items)
 	}
-}
-
-func Migrate() {
-	log.Println("Starting database migration process")
-	db, err := sql.Open("postgres", connectionString)
-	if err != nil {
-		log.Printf("Failed to connect to database: %v", err)
-		return
-	}
-	defer db.Close()
-	goose.SetDialect("postgres")
-	err = goose.Up(db, "./sqlc/migrations")
-	if err != nil {
-		log.Printf("Failed to run migrations: %v", err)
-		return
-	}
-	log.Println("Migration up completed successfully")
-}
-func Update() {
-	log.Println("Starting updater")
-	go func() {
-		updaters := []struct {
-			name string
-			run  func() error
-		}{
-			{"outfits", updateOutfits},
-			{"pets", updatePets},
-		}
-		for {
-			failed := false
-			for _, u := range updaters {
-				if err := u.run(); err != nil {
-					log.Printf("Update %s failed: %v", u.name, err)
-					failed = true
-					continue
-				}
-				log.Printf("Updated %s successfully", u.name)
-			}
-			if failed {
-				time.Sleep(5 * time.Minute)
-				continue
-			}
-			time.Sleep(time.Until(time.Now().Truncate(time.Hour).Add(time.Hour)))
-		}
-	}()
-}
-func Start() {
-	gin.SetMode(gin.ReleaseMode)
-	router := gin.Default()
-	router.Use(cors.Default())
-	router.GET("/outfits", listHandler("outfits", func(ctx context.Context, q *db.Queries, date time.Time) (any, error) {
-		return q.GetOutfits(ctx, date)
-	}))
-	router.GET("/pets", listHandler("pets", func(ctx context.Context, q *db.Queries, date time.Time) (any, error) {
-		return q.GetPets(ctx, date)
-	}))
-	port := getEnv("PORT", "8081")
-	log.Printf("API started, listening on port %s", port)
-	if err := router.Run(":" + port); err != nil {
-		log.Printf("Failed to start server: %v", err)
-	}
-}
-
-func main() {
-	Migrate()
-	Update()
-	Start()
 }

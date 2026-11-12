@@ -1,0 +1,13 @@
+FROM golang:alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache chromium
+RUN go install github.com/air-verse/air@latest
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+CMD ["air"]
