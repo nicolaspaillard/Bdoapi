@@ -79,7 +79,7 @@ func parseEvents(page *rod.Page, today time.Time) (events []scrapedEvent, err er
 }
 
 func scrapeEvents() ([]scrapedEvent, error) {
-	l := launcher.New().Leakless(true).Headless(false)
+	l := launcher.New().Leakless(true).Headless(true)
 	if path, ok := launcher.LookPath(); ok {
 		l = l.Bin(path)
 	}
