@@ -7,6 +7,8 @@ package db
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const deleteMissingLightstones = `-- name: DeleteMissingLightstones :exec
@@ -20,24 +22,37 @@ func (q *Queries) DeleteMissingLightstones(ctx context.Context, dollar_1 []int64
 }
 
 const getLightstones = `-- name: GetLightstones :many
-SELECT itemid, name, current_stock, base_price FROM lightstones
-ORDER BY name
+SELECT l.itemid, l.name, l.stock, l.price, q.quantity, l.silver
+FROM lightstones l
+LEFT JOIN quantities q ON q.itemid = l.itemid
+ORDER BY l.name
 `
 
-func (q *Queries) GetLightstones(ctx context.Context) ([]Lightstone, error) {
+type GetLightstonesRow struct {
+	Itemid   int64
+	Name     string
+	Stock    int64
+	Price    int64
+	Quantity pgtype.Int8
+	Silver   pgtype.Int8
+}
+
+func (q *Queries) GetLightstones(ctx context.Context) ([]GetLightstonesRow, error) {
 	rows, err := q.db.Query(ctx, getLightstones)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Lightstone
+	var items []GetLightstonesRow
 	for rows.Next() {
-		var i Lightstone
+		var i GetLightstonesRow
 		if err := rows.Scan(
 			&i.Itemid,
 			&i.Name,
-			&i.CurrentStock,
-			&i.BasePrice,
+			&i.Stock,
+			&i.Price,
+			&i.Quantity,
+			&i.Silver,
 		); err != nil {
 			return nil, err
 		}
@@ -50,27 +65,35 @@ func (q *Queries) GetLightstones(ctx context.Context) ([]Lightstone, error) {
 }
 
 const upsertLightstone = `-- name: UpsertLightstone :exec
-INSERT INTO lightstones (itemid, name, current_stock, base_price)
-VALUES ($1, $2, $3, $4)
+INSERT INTO lightstones (itemid, name, stock, price, silver)
+VALUES (
+  $1::bigint,
+  $2::text,
+  $3::bigint,
+  $4::bigint,
+  (SELECT round($4::bigint::numeric / q.quantity)::bigint
+   FROM quantities q WHERE q.itemid = $1::bigint)
+)
 ON CONFLICT (itemid) DO UPDATE SET
   name = EXCLUDED.name,
-  current_stock = EXCLUDED.current_stock,
-  base_price = EXCLUDED.base_price
+  stock = EXCLUDED.stock,
+  price = EXCLUDED.price,
+  silver = EXCLUDED.silver
 `
 
 type UpsertLightstoneParams struct {
-	Itemid       int64
-	Name         string
-	CurrentStock int64
-	BasePrice    int64
+	Itemid int64
+	Name   string
+	Stock  int64
+	Price  int64
 }
 
 func (q *Queries) UpsertLightstone(ctx context.Context, arg UpsertLightstoneParams) error {
 	_, err := q.db.Exec(ctx, upsertLightstone,
 		arg.Itemid,
 		arg.Name,
-		arg.CurrentStock,
-		arg.BasePrice,
+		arg.Stock,
+		arg.Price,
 	)
 	return err
 }

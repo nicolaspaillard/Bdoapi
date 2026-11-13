@@ -8,12 +8,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgx/v5"
 )
 
 // Update replaces the stored lightstones with the current market values.
+// Lightstones missing from the market list no longer exist in the game and are deleted.
 func Update() error {
 	items, err := arsha.GetWorldMarketList(85, 1, 2, 3, 4)
 	if err != nil {
@@ -34,12 +36,15 @@ func Update() error {
 	ids := make([]int64, 0, len(items))
 	failed := 0
 	for _, m := range items {
+		if strings.HasPrefix(m.Name, "Purified") {
+			continue
+		}
 		ids = append(ids, m.Id)
 		if err := queries.UpsertLightstone(ctx, db.UpsertLightstoneParams{
-			Itemid:       m.Id,
-			Name:         m.Name,
-			CurrentStock: m.CurrentStock,
-			BasePrice:    m.BasePrice,
+			Itemid: m.Id,
+			Name:   m.Name,
+			Stock:  m.CurrentStock,
+			Price:  m.BasePrice,
 		}); err != nil {
 			log.Printf("Failed to save lightstone %d: %v", m.Id, err)
 			failed++

@@ -6,6 +6,8 @@ package db
 
 import (
 	"time"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Event struct {
@@ -18,10 +20,11 @@ type Event struct {
 }
 
 type Lightstone struct {
-	Itemid       int64
-	Name         string
-	CurrentStock int64
-	BasePrice    int64
+	Itemid int64
+	Name   string
+	Stock  int64
+	Price  int64
+	Silver pgtype.Int8
 }
 
 type Outfit struct {
@@ -38,4 +41,9 @@ type Pet struct {
 	Date      time.Time
 	Sold      int64
 	Preorders int64
+}
+
+type Quantity struct {
+	Itemid   int64
+	Quantity int64
 }
