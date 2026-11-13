@@ -2,12 +2,10 @@ package pearl
 
 import (
 	"bdoapi/db"
+	"bdoapi/internal/arsha"
 	"bdoapi/internal/config"
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -17,112 +15,13 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-type PostId struct {
-	Id int64 `json:"id"`
-}
-
-type BiddingInfo struct {
-	Name   string `json:"name"`
-	Id     int64  `json:"id"`
-	Sid    int64  `json:"sid"`
-	Orders []struct {
-		Price   int64 `json:"price"`
-		Sellers int64 `json:"sellers"`
-		Buyers  int64 `json:"buyers"`
-	} `json:"orders"`
-}
-
-type MarketItem struct {
-	Name         string `json:"name"`
-	Id           int64  `json:"id"`
-	CurrentStock int64  `json:"currentStock"`
-	TotalTrades  int64  `json:"totalTrades"`
-	BasePrice    int64  `json:"basePrice"`
-	MainCategory int    `json:"mainCategory"`
-	SubCategory  int    `json:"subCategory"`
-}
-
-const apiBase = "https://api.arsha.io/v2/eu"
-
-var httpClient = &http.Client{Timeout: 30 * time.Second}
-
-func request(method, url string, body []byte, out any) error {
-	req, err := http.NewRequest(method, url, bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %w", err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected status %d: %s", resp.StatusCode, string(data))
-	}
-	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("failed to unmarshal response body: %w. %s", err, string(data))
-	}
-	return nil
-}
-
-func getWorldMarketList(mainCategory int, subCategories ...int) ([]MarketItem, error) {
-	fetch := func(url string) ([]MarketItem, error) {
-		var items []MarketItem
-		if err := request(http.MethodGet, url, nil, &items); err != nil {
-			return nil, fmt.Errorf("world market list (%s): %w", url, err)
-		}
-		return items, nil
-	}
-
-	base := fmt.Sprintf("%s/GetWorldMarketList?lang=en&mainCategory=%d", apiBase, mainCategory)
-	if len(subCategories) == 0 {
-		return fetch(base)
-	}
-
-	var all []MarketItem
-	for _, sub := range subCategories {
-		items, err := fetch(fmt.Sprintf("%s&subCategory=%d", base, sub))
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, items...)
-	}
-	return all, nil
-}
-
-func getBiddingInfo(items []MarketItem) ([]BiddingInfo, error) {
-	var result []BiddingInfo
-	for start := 0; start < len(items); start += 20 {
-		end := min(start+20, len(items))
-		ids := make([]PostId, 0, end-start)
-		for _, item := range items[start:end] {
-			ids = append(ids, PostId{Id: item.Id})
-		}
-		body, err := json.Marshal(ids)
-		if err != nil {
-			return nil, fmt.Errorf("marshal post body: %w", err)
-		}
-		var out []BiddingInfo
-		if err := request(http.MethodPost, apiBase+"/GetBiddingInfoList?lang=en", body, &out); err != nil {
-			return nil, fmt.Errorf("bidding info list: %w", err)
-		}
-		result = append(result, out...)
-	}
-	return result, nil
-}
-
 func hourOf(t time.Time) time.Time {
 	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), 0, 0, 0, t.Location())
 }
 
 // Shared update logic: fetches bidding info, then saves every item through the given callbacks.
-func updateItems(label string, items []MarketItem, save func(ctx context.Context, q *db.Queries, item MarketItem, preorders int64, date time.Time) error, cleanup func(ctx context.Context, q *db.Queries)) error {
-	bids, err := getBiddingInfo(items)
+func updateItems(label string, items []arsha.MarketItem, save func(ctx context.Context, q *db.Queries, item arsha.MarketItem, preorders int64, date time.Time) error, cleanup func(ctx context.Context, q *db.Queries) error) error {
+	bids, err := arsha.GetBiddingInfo(items)
 	if err != nil {
 		return err
 	}
@@ -139,6 +38,7 @@ func updateItems(label string, items []MarketItem, save func(ctx context.Context
 	queries := db.New(conn)
 
 	scrapTime := hourOf(time.Now())
+	failed := 0
 	for i, item := range items {
 		var preorders int64
 		for _, order := range bids[i].Orders {
@@ -146,54 +46,72 @@ func updateItems(label string, items []MarketItem, save func(ctx context.Context
 		}
 		if err := save(ctx, queries, item, preorders, scrapTime); err != nil {
 			log.Printf("Failed to create %s: %v", label, err)
+			failed++
 		}
 	}
-	cleanup(ctx, queries)
+	if err := cleanup(ctx, queries); err != nil {
+		return fmt.Errorf("cleanup %s: %w", label, err)
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d %s failed to save", failed, len(items), label)
+	}
 	return nil
 }
 
-func UpdateOutfits() error {
-	market, err := getWorldMarketList(55, 1, 2)
-	if err != nil {
-		return err
-	}
-	var outfits []MarketItem
-	for _, item := range market {
-		if strings.Contains(item.Name, "Premium Set") {
-			outfits = append(outfits, item)
-		}
-	}
-	return updateItems("outfits", outfits,
-		func(ctx context.Context, q *db.Queries, item MarketItem, preorders int64, date time.Time) error {
-			return q.CreateOutfit(ctx, db.CreateOutfitParams{
-				Itemid:    item.Id,
-				Name:      item.Name,
-				Date:      date,
-				Sold:      item.TotalTrades,
-				Preorders: preorders,
-			})
-		},
-		func(ctx context.Context, q *db.Queries) { q.DeleteOldOutfits(ctx) },
-	)
+type item struct {
+	label   string
+	subs    []int
+	filter  func(arsha.MarketItem) bool
+	save    func(ctx context.Context, q *db.Queries, item arsha.MarketItem, preorders int64, date time.Time) error
+	cleanup func(ctx context.Context, q *db.Queries) error
 }
 
-func UpdatePets() error {
-	pets, err := getWorldMarketList(55, 8)
+var Outfits = item{
+	label:  "outfits",
+	subs:   []int{1, 2},
+	filter: func(i arsha.MarketItem) bool { return strings.Contains(i.Name, "Premium Set") },
+	save: func(ctx context.Context, q *db.Queries, m arsha.MarketItem, preorders int64, date time.Time) error {
+		return q.CreateOutfit(ctx, db.CreateOutfitParams{
+			Itemid:    m.Id,
+			Name:      m.Name,
+			Date:      date,
+			Sold:      m.TotalTrades,
+			Preorders: preorders,
+		})
+	},
+	cleanup: func(ctx context.Context, q *db.Queries) error { return q.DeleteOldOutfits(ctx) },
+}
+
+var Pets = item{
+	label: "pets",
+	subs:  []int{8},
+	save: func(ctx context.Context, q *db.Queries, m arsha.MarketItem, preorders int64, date time.Time) error {
+		return q.CreatePet(ctx, db.CreatePetParams{
+			Itemid:    m.Id,
+			Name:      m.Name,
+			Date:      date,
+			Sold:      m.TotalTrades,
+			Preorders: preorders,
+		})
+	},
+	cleanup: func(ctx context.Context, q *db.Queries) error { return q.DeleteOldPets(ctx) },
+}
+
+func (it item) Update() error {
+	market, err := arsha.GetWorldMarketList(55, it.subs...)
 	if err != nil {
 		return err
 	}
-	return updateItems("pets", pets,
-		func(ctx context.Context, q *db.Queries, item MarketItem, preorders int64, date time.Time) error {
-			return q.CreatePet(ctx, db.CreatePetParams{
-				Itemid:    item.Id,
-				Name:      item.Name,
-				Date:      date,
-				Sold:      item.TotalTrades,
-				Preorders: preorders,
-			})
-		},
-		func(ctx context.Context, q *db.Queries) { q.DeleteOldPets(ctx) },
-	)
+	items := market
+	if it.filter != nil {
+		items = nil
+		for _, m := range market {
+			if it.filter(m) {
+				items = append(items, m)
+			}
+		}
+	}
+	return updateItems(it.label, items, it.save, it.cleanup)
 }
 
 // Handler serves the items returned by get for the date given in the "date" query parameter.

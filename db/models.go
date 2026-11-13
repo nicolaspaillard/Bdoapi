@@ -9,16 +9,22 @@ import (
 )
 
 type Event struct {
-	ID    string
-	Url   string
-	Image string
-	Tag   string
-	Title string
-	End   time.Time
+	Itemid int64
+	Url    string
+	Image  string
+	Tag    string
+	Title  string
+	End    time.Time
+}
+
+type Lightstone struct {
+	Itemid       int64
+	Name         string
+	CurrentStock int64
+	BasePrice    int64
 }
 
 type Outfit struct {
-	ID        int64
 	Itemid    int64
 	Name      string
 	Date      time.Time
@@ -27,7 +33,6 @@ type Outfit struct {
 }
 
 type Pet struct {
-	ID        int64
 	Itemid    int64
 	Name      string
 	Date      time.Time

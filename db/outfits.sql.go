@@ -11,11 +11,12 @@ import (
 )
 
 const createOutfit = `-- name: CreateOutfit :exec
-INSERT INTO outfits (
-  itemid, name, date, sold, preorders
-) 
-SELECT $1, $2, $3, $4, $5
-WHERE NOT EXISTS (SELECT 1 FROM outfits WHERE itemid = $1 AND date = $3)
+INSERT INTO outfits (itemid, name, date, sold, preorders)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (itemid, date) DO UPDATE SET
+  name = EXCLUDED.name,
+  sold = EXCLUDED.sold,
+  preorders = EXCLUDED.preorders
 `
 
 type CreateOutfitParams struct {

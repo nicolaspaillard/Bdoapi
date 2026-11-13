@@ -1,13 +1,16 @@
 -- name: GetEvents :many
-SELECT id, url, image, tag, title, "end" FROM events
+SELECT itemid, url, image, tag, title, "end" FROM events
 ORDER BY "end", title;
 
 -- name: CreateEvent :exec
-INSERT INTO events (
-  id, url, image, tag, title, "end"
-)
-SELECT $1, $2, $3, $4, $5, $6
-WHERE NOT EXISTS (SELECT 1 FROM events WHERE id = $1);
+INSERT INTO events (itemid, url, image, tag, title, "end")
+VALUES ($1, $2, $3, $4, $5, $6)
+ON CONFLICT (itemid) DO UPDATE SET
+  url = EXCLUDED.url,
+  image = EXCLUDED.image,
+  tag = EXCLUDED.tag,
+  title = EXCLUDED.title,
+  "end" = EXCLUDED."end";
 
 -- name: DeleteExpiredEvents :exec
 DELETE FROM events

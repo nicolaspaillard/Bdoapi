@@ -6,11 +6,12 @@ AND b.date = (SELECT MAX(date) FROM pets WHERE pets.date <= $1)
 ORDER BY a.name;
 
 -- name: CreatePet :exec
-INSERT INTO pets (
-  itemid, name, date, sold, preorders
-) 
-SELECT $1, $2, $3, $4, $5
-WHERE NOT EXISTS (SELECT 1 FROM pets WHERE itemid = $1 AND date = $3);
+INSERT INTO pets (itemid, name, date, sold, preorders)
+VALUES ($1, $2, $3, $4, $5)
+ON CONFLICT (itemid, date) DO UPDATE SET
+  name = EXCLUDED.name,
+  sold = EXCLUDED.sold,
+  preorders = EXCLUDED.preorders;
 
 -- name: DeleteOldPets :exec
 DELETE FROM pets

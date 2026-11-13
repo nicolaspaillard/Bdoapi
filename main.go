@@ -4,6 +4,7 @@ import (
 	"bdoapi/db"
 	"bdoapi/internal/config"
 	"bdoapi/internal/events"
+	"bdoapi/internal/lightstones"
 	"bdoapi/internal/pearl"
 	"context"
 	"database/sql"
@@ -35,32 +36,35 @@ func Migrate() {
 
 func Update() {
 	log.Println("Starting updater")
-	go func() {
-		updaters := []struct {
-			name string
-			run  func() error
-		}{
-			{"outfits", pearl.UpdateOutfits},
-			{"pets", pearl.UpdatePets},
-			{"events", events.Update},
-		}
-		for {
-			failed := false
-			for _, u := range updaters {
+	updaters := []struct {
+		name     string
+		run      func() error
+		interval time.Duration
+		aligned  bool
+		retry    time.Duration
+	}{
+		{"outfits", pearl.Outfits.Update, time.Hour, true, 5 * time.Minute},
+		{"pets", pearl.Pets.Update, time.Hour, true, 5 * time.Minute},
+		{"events", events.Update, 24 * time.Hour, true, 30 * time.Minute},
+		{"lightstones", lightstones.Update, 5 * time.Minute, false, 5 * time.Minute},
+	}
+	for _, u := range updaters {
+		go func() {
+			for {
 				if err := u.run(); err != nil {
 					log.Printf("Update %s failed: %v", u.name, err)
-					failed = true
+					time.Sleep(u.retry)
 					continue
 				}
 				log.Printf("Updated %s successfully", u.name)
+				if u.aligned {
+					time.Sleep(time.Until(time.Now().Truncate(u.interval).Add(u.interval)))
+				} else {
+					time.Sleep(u.interval)
+				}
 			}
-			if failed {
-				time.Sleep(5 * time.Minute)
-				continue
-			}
-			time.Sleep(time.Until(time.Now().Truncate(time.Hour).Add(time.Hour)))
-		}
-	}()
+		}()
+	}
 }
 
 func Start() {
@@ -74,6 +78,7 @@ func Start() {
 		return q.GetPets(ctx, date)
 	}))
 	router.GET("/events", events.Handler)
+	router.GET("/lightstones", lightstones.Handler)
 	port := config.GetEnv("PORT", "8081")
 	log.Printf("API started, listening on port %s", port)
 	if err := router.Run(":" + port); err != nil {

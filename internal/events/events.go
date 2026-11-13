@@ -26,7 +26,7 @@ const (
 )
 
 type scrapedEvent struct {
-	ID    string
+	ID    int64
 	URL   string
 	Image string
 	Tag   string
@@ -65,8 +65,12 @@ func parseEvents(page *rod.Page, today time.Time) (events []scrapedEvent, err er
 			if convErr != nil {
 				continue // "Ongoing" or no counter
 			}
+			id, idErr := strconv.ParseInt(attr(a, "", "data-boardno"), 10, 64)
+			if idErr != nil {
+				continue
+			}
 			events = append(events, scrapedEvent{
-				ID:    attr(a, "", "data-boardno"),
+				ID:    id,
 				URL:   attr(a, "", "href"),
 				Image: attr(a, "img", "src"),
 				Tag:   text(a, `i[class^="event_tag"]`),
@@ -96,7 +100,7 @@ func scrapeEvents() ([]scrapedEvent, error) {
 	defer browser.Close()
 
 	today := time.Now().UTC().Truncate(24 * time.Hour)
-	seen := map[string]bool{}
+	seen := map[int64]bool{}
 	var all []scrapedEvent
 
 	for p := 1; p <= maxEventPages; p++ {
@@ -152,20 +156,25 @@ func Update() error {
 	defer conn.Close(ctx)
 	queries := db.New(conn)
 
+	failed := 0
 	for _, e := range events {
 		if err := queries.CreateEvent(ctx, db.CreateEventParams{
-			ID:    e.ID,
-			Url:   e.URL,
-			Image: e.Image,
-			Tag:   e.Tag,
-			Title: e.Title,
-			End:   e.End,
+			Itemid: e.ID,
+			Url:    e.URL,
+			Image:  e.Image,
+			Tag:    e.Tag,
+			Title:  e.Title,
+			End:    e.End,
 		}); err != nil {
-			log.Printf("Failed to create event: %v", err)
+			log.Printf("Failed to create event %d: %v", e.ID, err)
+			failed++
 		}
 	}
 	if err := queries.DeleteExpiredEvents(ctx); err != nil {
-		log.Printf("Failed to delete expired events: %v", err)
+		return fmt.Errorf("delete expired events: %w", err)
+	}
+	if failed > 0 {
+		return fmt.Errorf("%d of %d events failed to save", failed, len(events))
 	}
 	return nil
 }
