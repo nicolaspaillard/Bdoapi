@@ -46,7 +46,7 @@ func Update() {
 		{"outfits", pearl.Outfits.Update, time.Hour, true, 5 * time.Minute},
 		{"pets", pearl.Pets.Update, time.Hour, true, 5 * time.Minute},
 		{"events", events.Update, 24 * time.Hour, true, 30 * time.Minute},
-		{"lightstones", lightstones.Update, 5 * time.Minute, false, 5 * time.Minute},
+		{"lightstones", lightstones.Update, 15 * time.Minute, false, 5 * time.Minute},
 	}
 	for _, u := range updaters {
 		go func() {
