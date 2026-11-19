@@ -75,7 +75,7 @@ func parseEvents(page *rod.Page, today time.Time) (events []scrapedEvent, err er
 				Image: attr(a, "img", "src"),
 				Tag:   text(a, `i[class^="event_tag"]`),
 				Title: text(a, ".title em"),
-				End:   today.AddDate(0, 0, days),
+				End:   today.AddDate(0, 0, days-1),
 			})
 		}
 	})
